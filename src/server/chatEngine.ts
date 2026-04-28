@@ -71,11 +71,20 @@ function getInputIntent(question: string): ChatResponse["intent"] | null {
     return "assistant_capability";
   }
 
+  if (
+    /\b(what can this assistant answer|what can patterna answer|how is the api key protected|api key protected|how would a business configure this|business configure|how does patterna return structured output|structured output|what happens if the answer is not known|answer is not known|what knowledge sources are configured|knowledge sources configured)\b/.test(
+      normalized,
+    )
+  ) {
+    return "assistant_capability";
+  }
+
   return null;
 }
 
 function createRouterResponse(question: string, assistantName: string): ChatResponse | null {
   const intent = getInputIntent(question);
+  const normalized = normalizeQuestion(question);
   const suggestedFollowUps = [
     "What can this assistant answer?",
     "How is the API key protected?",
@@ -96,6 +105,62 @@ function createRouterResponse(question: string, assistantName: string): ChatResp
   }
 
   if (intent === "assistant_capability") {
+    if (/\b(api key|secret|protected|server)\b/.test(normalized)) {
+      return {
+        intent,
+        answer:
+          "The browser never receives the Gemini API key. The React client sends questions to /api/chat, and the server route reads GEMINI_API_KEY from private environment variables before calling Gemini.",
+        confidence: 0.82,
+        cannotAnswer: false,
+        matchedSources: ["Assistant behavior"],
+        suggestedFollowUps,
+        provider: "server-router",
+        model: "patterna-intent-router",
+      };
+    }
+
+    if (/\b(configure|business|knowledge|sources|entries)\b/.test(normalized)) {
+      return {
+        intent,
+        answer:
+          "A business configures Patterna by setting PATTERNA_KNOWLEDGE_JSON on the server with approved FAQ, policy, product, onboarding, or support entries. The UI can stay the same while the knowledge entries are replaced for a different use case.",
+        confidence: 0.8,
+        cannotAnswer: false,
+        matchedSources: ["Assistant behavior"],
+        suggestedFollowUps,
+        provider: "server-router",
+        model: "patterna-intent-router",
+      };
+    }
+
+    if (/\b(structured|json|confidence|source|follow up|followup)\b/.test(normalized)) {
+      return {
+        intent,
+        answer:
+          "Patterna asks Gemini for structured JSON containing the answer, confidence score, matched source labels, cannot-answer state, and suggested follow-up questions. The interface renders those fields directly instead of treating the response as an opaque paragraph.",
+        confidence: 0.8,
+        cannotAnswer: false,
+        matchedSources: ["Assistant behavior"],
+        suggestedFollowUps,
+        provider: "server-router",
+        model: "patterna-intent-router",
+      };
+    }
+
+    if (/\b(not known|unknown|unsupported|cannot answer)\b/.test(normalized)) {
+      return {
+        intent,
+        answer:
+          "If the configured knowledge base does not contain enough information, Patterna should mark the answer as unsupported instead of inventing details. The response contract includes cannotAnswer, confidence, and matchedSources so the UI can make that boundary visible.",
+        confidence: 0.78,
+        cannotAnswer: false,
+        matchedSources: ["Assistant behavior"],
+        suggestedFollowUps,
+        provider: "server-router",
+        model: "patterna-intent-router",
+      };
+    }
+
     return {
       intent,
       answer: `${assistantName} answers from approved knowledge entries and avoids inventing unsupported details. Configure it with your own FAQ, product notes, support policies, or onboarding content to make it useful for a specific business context.`,
@@ -389,4 +454,3 @@ export async function createPatternaChatResponse(payload: ChatPayload, env: Runt
 
   return normalizeResponse(parseJsonResponse(text), model, knowledge);
 }
-
